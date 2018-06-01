@@ -1,0 +1,891 @@
+---
+title: "Restaurant analysis"
+author: "Anitha Vallikunnel"
+date: "3/25/2018"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(cache = TRUE, 
+                      #suppress any R warnings from being included in the final document
+                      warning = FALSE, 
+                      #suppress any R messages from being included in the final document
+                      message = FALSE, 
+                      cache.lazy = FALSE)
+
+dyn.load('/Library/Java/JavaVirtualMachines/jdk-9.0.4.jdk/Contents/Home/lib/server/libjvm.dylib')
+
+```
+
+#{.tabset .tabset-fade}
+
+## 1. Introduction
+
+<!----------------- Introduction to the problem---------------------------->
+
+<img style="width:100%; height: 40%;float: center;max-width-100px" src="/Users/anithavallikunnel/CourseWork/DataWrangling/Project/yelp_image.png">
+
+
+My retirement plan is to start a quiet little cafe in the foothills of Himalayas. I want to fill my little space with paintings and books and obviously, provide amazing food. Though this is a long shot plan, I am constantly curious about market dynamics of restaurants. In order to start understanding what makes a good restaurant, I planned to do a market research analysis of restaurants in United states. 
+
+In order to conduct the market analysis, I am making use of the [YELP dataset](https://www.kaggle.com/yelp-dataset/yelp-dataset/data) which is a subset of Yelp's businesses, reviews, and user data.It was originally put together for the Yelp Dataset Challenge to give a chance for students to conduct research or analysis on Yelp's data and share their discoveries. Below are the proposed approach/analytic technique to conduct the analysis.
+
+* **Geographical analysis** -  This analysis is to aid the location selection process and find the best possible place to establish the cafe.The user should be able to select the desired city and see the distribution of restaurants across the location and their ratings. May be it is better to start the restaurant that gives high quality food in a location with large number of low rated restaurants. May be opening a restaurant in a street full of popular restaurants gives good visibility. It all depends on the statergy adopted by the management.
+
+* **Understanding previous trends** - This is to aid the selection of working hours and cuisine for the restaurant. Some places might be suited for restaurants that are open during evening. Some locations might give profit when the restaurant is open through out the day. By analysing at the past trends, we can decide our restaurants best suited working hours. We will also explore the different cuisines that are popular in the locality chosen.
+
+* **Learning from the best and worst players in the market** - Sentiment analysis is done on the user reviews to understand what trends and patterns in user behavious. Bad reviews help us to learn without making the mistakes by ourselves. Positive reviews can help me understand what works for the general public and incorporate that into my business.
+
+
+## 2. Packages
+
+<!-------------These are the libaries used------------------>
+
+The details of different packages used for this analysis is listed below.
+
+* [pacman](https://cran.r-project.org/web/packages/pacman/vignettes/Introduction_to_pacman.html): To load packages and install missing ones
+* [data.table](https://cran.r-project.org/web/packages/data.table/data.table.pdf): Fast data load.
+* [tidyverse](https://www.tidyverse.org): Package of multiple R packages used for data manipulation.stringr, dplyr, readr and ggplot2 from this package is used for analysis.
+* [stringr](https://cran.r-project.org/web/packages/stringr/vignettes/stringr.html): String operations in R
+* [lubridate](https://cran.r-project.org/web/packages/lubridate/lubridate.pdf): Package to manipulate dates and times
+* [DT](https://cran.r-project.org/web/packages/DT/index.html): Package to put data objects in R as HTML tables
+* [NLP](https://cran.r-project.org/web/packages/NLP/NLP.pdf): Package for basic classes and methods for Natural Language Processing
+* [tidytext](https://cran.r-project.org/web/packages/tidytext/vignettes/tidytext.html): Package for text mining for word processing and sentiment analysis
+* [knitr](https://cran.r-project.org/web/packages/knitr/knitr.pdf): A General-Purpose Package for Dynamic Report Generation in R 
+* [leaflet](https://cran.r-project.org/web/packages/leaflet/leaflet.pdf): Create Interactive Web Maps
+* [tm](https://cran.r-project.org/web/packages/tm/tm.pdf): Text mining package
+* [wordcloud](https://cran.r-project.org/web/packages/wordcloud/wordcloud.pdf): To create wordclouds
+* [grid](https://www.rdocumentation.org/packages/grid/versions/3.4.3): A rewrite of the graphics layout capabilities
+* [gridExtra](https://cran.r-project.org/web/packages/gridExtra/index.html): Provides a number of user-level functions to work with "grid" graphics, notably to arrange multiple grid-based plots on a page, and draw tables.
+* [radarchart](https://cran.r-project.org/web/packages/radarchart/index.html): Creates interactive radar charts
+* [igraph](https://cran.r-project.org/web/packages/igraph/index.html): Network Analysis and Visualization
+* [ggraph](https://cran.r-project.org/web/packages/ggraph/index.html): The grammar of graphics as implemented in ggplot2 
+
+```{r libraries }
+
+if (!require("pacman")) install.packages("pacman")
+
+# p_load function installs missing packages and loads all the packages given as input
+pacman::p_load("data.table", 
+               "tidyverse",
+               "stringr", 
+               "lubridate", 
+               "DT", 
+               "tidytext",
+               "NLP" ,
+               "knitr",
+               "leaflet",
+               "tm",
+               "wordcloud",
+               "grid",
+               "gridExtra",
+               "radarchart",
+               "igraph",
+               "ggraph")
+
+```
+
+
+## 3. Data Preperation{.tabset .tabset-fade}
+
+<!---------------------- All data load/cleansing related steps are in this section --------------------->
+
+The data is loaded from the source and cleaned for further analysis.
+
+### 3.1 Data source
+
+
+Yelp is an American multinational corporation founded in 2004 by former PayPal employees Russel Simmons and Jeremy Stoppelman. It develops, hosts and markets Yelp.com and the Yelp mobile app, which publish crowd-sourced reviews about local businesses, as well as the online reservation service Yelp Reservations. The [dataset](https://www.kaggle.com/yelp-dataset/yelp-dataset/data) used in this study is a subset of Yelp's businesses, reviews, and user data. It was originally put together for the Yelp Dataset Challenge which is a chance for students to conduct research or analysis on Yelp's data and share their discoveries. 
+
+In the dataset you'll find information about businesses across 11 metropolitan areas in four countries. There are [6 tables](https://www.kaggle.com/yelp-dataset/yelp-dataset/data) available that containes business related information
+
+* business : Contains location and category information for each business
+* business_attriutes : Contains attributes of the business like music, delivery, parking etc.
+* business_hours : Contains working hours for each weekday for businesses
+* checkin : Number of checkins for each day and hour for a business is stored in this dataset.
+* tip : Contains tips and comment written by a user on a business
+* review : Contains user text review data for businesses
+
+### 3.2 Data import
+
+The six files containing data is loaded in this step. fread from data.table is mainly used for loading data as it is fast for large files. After importing data, each of these data sets are analysed and cleaned according to the needs.
+
+``` {r data_load ,results="hide", cache = TRUE}
+
+business <- fread("yelp-dataset/yelp_business.csv")
+business_attributes <- fread("yelp-dataset/yelp_business_attributes.csv")
+business_hours <- read_csv("yelp-dataset/yelp_business_hours.csv")
+checkin <- fread("yelp-dataset/yelp_checkin.csv")
+tip <- fread("yelp-dataset/yelp_tip.csv")
+review <- read_csv("yelp-dataset/yelp_review.csv")
+
+```
+
+### 3.3 Data cleaning {.tabset .tabset-fade}
+
+In this step, each of the six files are evaluated seperately and cleaned for futher analysis.
+
+####a. business
+
+The business table containes the location and category details of businesses included in the dataset. There are `r dim(business)[1]` businesses listed in the original dataset. For this project, only restaurants from Unites States is considered.
+
+``` {r data_filter_business , cache = TRUE}
+
+# Only the data for restaurants in United states are kept
+business  <- business %>% 
+             filter(state %in% state.abb) %>% 
+             filter(categories %like% "Restaurant")
+```
+
+After filtering out the restaurants in United states, we have data regarding `r dim(business)[1]` businesses. We will first investigate the amount of data available for each city and will consider the top 10 cities for this study.
+
+``` {r top_10_cities}
+# Displays the top 10 cities present in the data set based on number of restaurants for which data is available.
+
+business %>% select(state,city) %>% 
+             dplyr::group_by(state,city) %>% 
+             summarise(n = n()) %>% 
+             arrange(desc(n)) %>% 
+             head(n = 10) %>%
+             datatable(class = 'cell-border stripe hover condensed responsive')
+```
+
+
+Also for the top 10 cities there are multiple names present in the data set. Below are the different patterns found for the same city names.
+
+* **Las Vegas** : NV state cities with names *Las Vegas*, *North Las Vegas*, *N Las Vegas*, *Las Vegas*, *las vegas*, *N. Las Vegas*, *South Las Vegas*, *Las vegas* and *LasVegas* are combined together.
+* **Phoenix** : AZ state cities with names *Phoenix*, *Pheonix*, *Pheonix AZ*, *Phoenix Valley* are combined together. 
+* **Pittsburgh** : PA state cities with names *Pittsburgh* and  *East Pittsburgh* are combined together. 
+* **Scottsdale** : AZ state cities with names *Scottsdale* and *Scottdale* are combined together. 
+* **Cleveland** : OH state cities with names *Cleveland*, *Cleveland Heights*, *East Cleveland*, *Cleveland Hghts.* are combined together
+* **Mesa** : AZ state cities with names *Mesa*, *MESA*, *Mesa AZ* are combined together.
+
+``` {r city_rename}
+
+# Lists are created so that if any additional pattern is found, it can be added flexibly. 
+
+# All restaurants in Las vegas have name is same format
+lasVegas <- c("Las Vegas", "North Las Vegas", "N Las Vegas", "Las Vegas", "las vegas", "N. Las Vegas","South Las Vegas", "Las vegas", "LasVegas")
+business$city[business$city %in% lasVegas & business$state == "NV" ] <- "Las Vegas"
+
+# All restaurants in Phoenix have name is same format
+phoenix <- c("Pheonix", "Pheonix", "Pheonix AZ" , "Phoenix Valley")
+business$city[business$city %in% phoenix & business$state == "AZ" ] <- "Phoenix"
+
+# All restaurants in Pittsburgh have name is same format
+pittsburgh <- c("Pittsburgh", "East Pittsburgh")
+business$city[business$city %in% pittsburgh & business$state == 'PA' ] <- "Pittsburgh"
+
+# All restaurants in Scottsdale have name is same format
+scottsdale <- c("Scottsdale", "Scottdale")
+business$city[business$city %in% scottsdale & business$state == 'AZ' ] <- "Scottsdale"
+
+# All restaurants in Cleveland have name is same format
+cleveland <- c("Cleveland", "Cleveland Heights", "East Cleveland", "Cleveland Hghts.")
+business$city[business$city %in% cleveland & business$state == 'OH' ] <- "Cleveland"
+
+# All restaurants in Mesa have name is same format
+mesa <- c("Mesa", "MESA", "Mesa AZ")
+business$city[business$city %in% mesa & business$state == 'AZ' ] <- "Mesa"
+
+# Filters the data so that we analyse only the restaurants from top 10 cities (Based on count)
+top_10_cities <- c("Las Vegas", "Phoenix", "Charlotte", "Pittsburgh", "Scottsdale", "Cleveland", "Mesa", "Madison", "Tempe", "Chandler")
+business <- business %>% filter(city %in% top_10_cities)
+
+```
+
+The final data set for top ten cities contains information regarding `r dim(business)[1]` restaurants. Some of the important variables are describled below. A snapshot of the dataset is also provided.
+
+``` {r variables_buisness, echo = FALSE}
+kable(data.frame("Name" = colnames(business)[c(1,2,5,8,9,10,12,13)], "Description" = c("ID of the business", "Name of the business", "City at which business is located","Latitute coordinate of the restaurant. Will be used to plot the location on the map." ,"Longitude coordinate of the restaurant. Will be used to plot the location on the map." ,"Provides the rating of the restaurant. Minimum = 0, Maximum = 5" , "If the restaurant is working/shut down", "Categories under which the restaurant falls")))
+```
+
+``` {r data_display_business }
+
+# Displays 10 rows from the dataset
+datatable(head(business, n = 10), class = 'cell-border stripe hover condensed responsive')
+```
+
+####b. business_attributes
+
+The business_attributes table contains the attributes of businesses like music, delivery, parking etc. There are `r dim(business_attributes)[1]` businesses listed in the original dataset. We need to filter and keep the restaurants in top 10 cities.
+
+``` {r data_filter_business_attributes , cache = TRUE}
+
+# Only the data for restaurants from top 10 cities are retained
+
+business_attributes  <- business_attributes %>% 
+                        filter(business_id %in% business$business_id) 
+
+```
+
+
+After filtering, only `r dim(business_attributes)[1]` restaurants are retained. There are `r dim(business_attributes)[2]` columns in this data set. Not all of them are relevant to us. We will drop the irrelevant variables.
+
+``` {r column_filter_business_attributes , cache = TRUE}
+
+# The attributes that are not significant are dropped from the dataset.
+
+business_attributes <- business_attributes %>% 
+                       select(-c( HasTV, Caters , BusinessAcceptsBitcoin, BYOBCorkage, BYOB), -contains("Hair"))
+
+```
+
+There are `r dim(business_attributes)[2]` variables left in the data set now. The final data set for top ten cities contains information regarding `r dim(business_attributes)[1]` observations.
+
+``` {r data_display_business_attributes }
+
+# 10 rows from business_attributes table is displayed
+kable(head(business_attributes, n = 10))
+
+# NA in the data set is represented by the charecter 'Na'. They are replaced by NA
+business_attributes[,2:ncol(business_attributes)][ business_attributes[,2:ncol(business_attributes)] == 'Na' ] <- NA
+
+# The percentage of missing values is calculated for each attribute
+data.table("Variable" = colnames(business_attributes), "Percentage of NA values" = colMeans(is.na(business_attributes)))
+
+```
+
+There are only `r sum(colMeans(is.na(business_attributes)) < 0.5) ` columns with less than 50% of missing values. From the data, we can see that they are business_id and attributes related to parking. Since this information is not valuable, we will discard this data set.
+
+``` {r discard_business_attributes}
+# Discard business attributes
+
+rm("business_attributes")
+
+```
+
+
+####c. business_hours
+
+The business_hours table contains the attributes of businesses included in the dataset. There are `r dim(business_hours)[1]` businesses listed in the original dataset. We need to filter and keep the restaurants in top 10 cities.
+
+``` {r data_filter_business_hours , cache = TRUE}
+
+# Only the data for restaurants from top 10 cities are retained
+
+business_hours  <- business_hours %>% 
+                   filter(business_id %in% business$business_id) 
+
+```
+
+The final data set for top ten cities contains information regarding `r dim(business_hours)[1]` restaurants.The data set contains different columns for each weekday. We create one single column for weekday and seperate the starting and closing hours for each business. The variables related to time are converted to hour and second format from character. The final data set form is displayed below.
+
+``` {r data_cleaning_hours}
+
+
+business_hours <- business_hours %>%
+                  # Name of the column will be stored in 'week_day' and value will be stored in 'working hours'
+                  gather(week_day, working_hours, -business_id) %>%
+                  # The character value None represents NA
+                  transform(working_hours =  ifelse(working_hours == 'None',NA,working_hours)) %>% 
+                  # All null values are removed
+                  na.omit() %>% 
+                  # From 'working_hours' column, starting and closing hours are seperated
+                  separate(col = working_hours, into = c("starting_hour", "closing_hour"), sep = "-") %>% 
+                  # Starting and closing hours are stored as Hour and minutes format
+                  transform(starting_hour = hm(starting_hour), closing_hour = hm(closing_hour))
+
+
+
+```
+
+``` {r data_display_business_hours }
+# Displays 3 rows of business_hours table
+
+kable(head(business_hours, n = 5))
+```
+
+
+
+####d. checkin
+
+The checkin table contains the number of checkins that occured at a restaurant at a given weekday and hour of the day. There are `r dim(checkin)[1]` check in observations for `r length(unique(checkin$business_id))` businesses listed in the original dataset. We need to filter and keep the restaurants in top 10 cities. The hour was stored as integer. It is converted to time format. To display the weekdays in order, they are converted to ordered factors.
+
+``` {r data_filter_checkin , cache = TRUE}
+
+
+
+checkin  <- checkin %>% 
+            # Only the data for restaurants from top 10 cities are retained
+            filter(business_id %in% business$business_id) %>%
+            # Hour is converted to time format
+            transform( hour = hour(hm(hour)),
+                       # Weekdays are stored as factors with order level
+                       weekday = factor(checkin$weekday, levels = c("Sun","Sat","Fri","Thu","Wed","Tue","Mon"), ordered = TRUE) )
+
+
+
+```
+
+The final data set for top ten cities contains `r dim(checkin)[1]` check in observations for `r length(unique(checkin$business_id))` restaurants. Variable descriptions and snap shot of data can be seen below. Minimum, Maximum and Average number of checkins for each week day is listed below.
+
+``` {r variables_checkin, echo = FALSE}
+kable(data.frame("Name" = colnames(checkin), "Description" = c("ID of the business", "Weekday at which check in occured", "Hour at which check in occured", "Average number of check ins for the given week day and hour" )))
+
+# Summarises the checkins by week day
+kable(checkin %>% 
+        dplyr::group_by(weekday) %>% 
+        dplyr::summarise(min_checkins = min(checkins), 
+                  max_checkins = max(checkins) , 
+                  average_checkins = mean(checkins)))
+
+```
+
+A snapshot of data is displayed below.
+
+``` {r data_display_checkin }
+# Displays 10 rows of checkin table
+
+datatable(head(checkin, n = 10), class = 'cell-border stripe hover condensed responsive')
+
+```
+
+####e. tips
+
+The tip table contains the attributes of tips given by users. There are `r dim(tip)[1]` observations for `r length(unique(tip$business_id))` businesses listed in the original dataset. We need to filter and keep the restaurants in top 10 cities.
+
+``` {r data_filter_tip , cache = TRUE}
+
+# Only the data for restaurants from top 10 cities are retained
+
+tip  <- tip %>% 
+        filter(business_id %in% business$business_id) 
+
+```
+
+The final data set for top ten cities contains information regarding `r dim(tip)[1]` tips for `r length(unique(tip$business_id))` restaurants .
+
+
+``` {r data_display_tip }
+# Displays 10 observations for tip data set.
+
+kable(head(tip, n = 10), class = 'cell-border stripe hover condensed responsive')
+
+
+```
+
+
+####f. reviews
+
+The review table contains information regarding a review given by a user for a business. There are `r dim(review)[1]` reviews for  `r length(unique(review$business_id))` businesses listed in the original dataset. We need to filter and keep the restaurants in top 10 cities.
+
+``` {r data_filter_reviews , cache = TRUE}
+
+# Only the data for restaurants from top 10 cities are retained
+
+review  <- review %>% 
+           filter(business_id %in% business$business_id ) 
+
+```
+
+The final data set for top ten cities contains `r dim(review)[1]` reviews for  `r length(unique(review$business_id))` businesses. The description for important variables and a snapshot of data can be seen below.
+
+``` {r variables_review, echo = FALSE}
+kable(data.frame("Name" = colnames(review), "Description" = c("ID of the review", "ID of the user who gave the review", "ID of the business which is reviewed", "Stars given by user for the business", "Date of review" ,"review text", "Number of users who found the review as useful","Number of users who found the review as funny","Number of users who found the review as cool")))
+```
+
+
+
+``` {r data_display_review}
+# Displays 10 observations for tip data set.
+
+kable(head(review, n = 10))
+
+```
+
+<!------------------------------- EDA---------------------------->
+
+## 4. Exploratory Data Analysis {.tabset .tabset-fade}
+
+### Top cuisines
+
+
+#### Most frequent categories in data set
+
+*Categories* variable lists the different categories to which a restaurant belongs to. There are few redundant categories like "Restaurants", "Food", "Nightlife", "Bars", "New" that are identified in the initial analysis. These are removed before creating the wordcloud to find the most frequent categories across cities. In the wordcloud, we consider only those categories that appear in data set atleast 300 times. Most Frequent categories appear in the center of the word cloud in large size. As we move ouwards, the size of words decreases denoting smaller frequencies. Same color words have similar frequency range.
+
+``` {r cuisines_wordcloud , fig.align = "center"}
+
+# All categories listed for different restaurants are taken
+categories <- unlist(strsplit(business$categories, ";"))
+# Most common categories like food are removed
+remove_categories <- c("Restaurants", "Food", "Nightlife", "Bars", "New")
+clean_categories <- removeWords(categories, remove_categories)
+# word cloud is created with this set of categories
+wordcloud(clean_categories, 
+          min.freq = 300,
+          random.order=FALSE, 
+          rot.per=0.35,
+          colors=brewer.pal( 8,"Dark2"))
+
+```
+
+#### Most popular five cuisines in each city
+
+From the frequency plot, we can see that there are few categories like buffets, speciality ,caterers etc. Inorder to understand the top cuisines across locations, we consider the following cusinines that are identified in the initial analysis.
+
+* *Cuisines considered* : "American (Traditional)","American (New)","Sandwiches","Fast Food","Mexican", "Pizza", "Italian","Chinese","Ice Cream & Frozen Yogurt","Bakeries","Desserts","Seafood","Sushi Bars","Juice Bars & Smoothies","Mediterranean","Steakhouses","Burgers", "Salad","Barbeque","Cocktail Bars","Thai","Buffets","Hot Dogs", "Asian", "Japanese","American"
+
+We can see that the American cuisine is most popular in most places. But Fast food, Pizza, Mexican and sandwiches has won the race in some places. Asian cuisines like Chinese and Japanese did not make it to the top 5.
+
+``` {r top_cuisines, fig.width = 10, fig.height = 6, fig.align = "center" }
+
+# Selected list of cuisines
+cuisine_list <- c( "American (Traditional)", "American (New)", "Sandwiches", "Fast Food", "Mexican", "Pizza", "Italian", "Chinese", "Ice Cream & Frozen Yogurt", "Bakeries", "Desserts", "Seafood", "Sushi Bars", "Juice Bars & Smoothies", "Mediterranean", "Steakhouses", "Burgers", "Salad", "Barbeque", "Cocktail Bars", "Thai", "Buffets", "Hot Dogs", "Asian", "Japanese", "American", "Indian")
+
+top_cusine_plot <- business %>% 
+                   # Only city and categories are needed for this analysis
+                   dplyr::select(city , categories) %>%
+                   # categories are seperated by ; in teh variable
+                   transform(categories = strsplit(categories, ";")) %>%
+                   # A single row is created for each category from the list
+                   unnest(categories) %>%
+                   # Only categories in the cuisine_list is considered
+                   filter(categories %in% cuisine_list)  %>%  
+                    dplyr::group_by(categories,city) %>%
+                    # Count is calculated a combination of city and category
+                    tally() %>% 
+                    # Top 5 categories for a city is filtered 
+                    dplyr::group_by(city) %>% 
+                    top_n(n = 5) %>% 
+                    # To plot uniformly, ranks are given. Maximum count is given the rank 1
+                    mutate( count_rank = rank(-n)) %>% 
+                    # Bar chart for each city is shown
+                    ggplot(aes(x = count_rank, y = n))+ 
+                    geom_bar(stat = "identity", fill = "#87cefa") + 
+                    facet_wrap(~city, nrow = 2, scales = "free") + 
+                    coord_flip() + 
+                    # 1 should come on the top
+                    scale_x_reverse() +
+                    # Name of the cuisine is displayed inside the bars
+                    geom_text(aes(label = categories), size = 2,hjust="inward") 
+
+top_cusine_plot
+
+```
+
+### Check in trends
+
+For each city, average check-ins for all hours for every weekday is calculated. We can see the patterns across time and day with this visualization. Dark blue denotes more checkins and orange shows lesser number of checkins for a square that corresponds to a given hour in a weekday. We can see that Las Vegas being a party city, hours after midnight are the busy hours throughout the week. We can see that for the city of Scottsdale, dinner hour or the time around 7 is the busiest hour throught the weekend. Sunday breakfast is seen as the busiest hour for Pittsburgh.
+
+
+<center> <h4> <span style="color:blue">Busy</span> and <span style="color:orange">lazy </span> working hours in each city </h4> </center>
+
+```{r top_time, fig.height = 15, fig.width = 10}
+
+timeplot <- function(city_name){
+        checkin %>% 
+        inner_join(business, by = "business_id") %>% 
+        # Data for the city is selected
+        filter(city == city_name)%>%
+        # For each weekday and hour, average number of checkins are calculated 
+        group_by( weekday, hour)%>%
+        summarise( mean_checkin = mean(checkins)) %>%
+        ggplot(aes(x = hour, 
+                   y= weekday, 
+                   fill = mean_checkin))+
+        geom_tile(colour = "white") + 
+        # If teh number of checkins are high, they are in blue and if they are low, they will be in orange
+        scale_fill_gradient(low = "orange", high = "blue", name = "Check-in count") + 
+        ylab(" Day of the week") + 
+        xlab(" Hour of the day") +
+        ggtitle(paste("Check in trends for",city_name))
+
+}
+# Plots are created for all cities in the list
+checkin_plots <- lapply(top_10_cities, timeplot)
+# They are plotted in a grid of 5 rows and 2 columns
+do.call("grid.arrange", c(checkin_plots, ncol=2))
+```
+ 
+ 
+
+### Geographical locations
+
+The location of restaurants are shown in geographical maps in this section. A function is created to plot the maps. It takes in the city name, filters the data for the given city and plots the map. Leaflet package is used for this. Since there are so many restauants in a city, they are clustered and shown in map. When you hover the mouse on the number, the region for which the numbers are aggregated are highlighted. This shows us where restaurants are densely populated.
+
+Clicking the numbers in circles zooms in to the area. On zooming in, the aggregation regions change. When it is zoomed into the lowest level, the restaurant locations can be seen in detail. At this point, if the rating of restaurant is 1 or 2, it is considered as a low rated outlet and is represented by a red circle. If the rating is 3, it is considerd as average and is shown as blue circle. High rated restaurants(places with rating of 4 or 5) are represented by green circles.
+
+
+```{r map_function}
+
+geographical_map <- function(location_name){
+  
+      location_business <- business %>%
+                          # filter for the city
+                          filter(city == location_name) %>%
+                          # Creates 3 level based on rating
+                          mutate( rating_level = ifelse(stars == 4 | stars == 5 ,"High", ifelse(stars == 3, "Medium", "Low")))
+      
+      # Creates color pallette for rating levels
+      pallete <- colorFactor(c("dark red",  "blue","dark green"), domain = c("Low", "Medium","High"))
+     
+      location_business %>%  
+                 leaflet() %>% 
+                 setView(lng = mean(location_business$longitude), 
+                         lat = mean(location_business$latitude), 
+                         zoom = 12) %>% 
+                 addProviderTiles(providers$CartoDB.Positron) %>%
+                 addCircleMarkers(~longitude, 
+                                  ~latitude,
+                                  radius = 3,
+                                  fillOpacity = 0.5,
+                                  # Creates clusters for restaurants on high level
+                                  clusterOptions = markerClusterOptions(),
+                                  # Color palette is assigned based on rating level
+                                  color = ~pallete(rating_level))
+     
+}
+
+
+```
+
+#### Restaurants across Las Vegas
+
+```{r map_LV , fig.align = "center"}
+geographical_map("Las Vegas")
+```
+
+#### Restaurants across Phoenix
+
+```{r map_Phoenix, fig.align = "center"}
+geographical_map("Phoenix")
+```
+
+#### Restaurants across Pittsburgh
+
+```{r map_Pittsburgh, fig.align = "center"}
+geographical_map("Pittsburgh")
+
+```
+
+#### Restaurants across Scottsdale
+
+```{r map_Scottsdale, fig.align = "center"}
+geographical_map("Scottsdale")
+```
+
+#### Restaurants across Chandler
+
+
+```{r map_Chandler, fig.align = "center"}
+geographical_map("Chandler")
+
+```
+
+#### Restaurants across Madison
+
+```{r map_Madison, fig.align = "center"}
+geographical_map("Madison")
+```
+
+
+#### Restaurants across Cleveland
+
+```{r map_Cleveland, fig.align = "center"}
+geographical_map("Cleveland")
+```
+
+#### Restaurants across Mesa
+
+```{r map_Mesa, fig.align = "center"}
+geographical_map("Mesa")
+```
+
+#### Restaurants across Charlotte
+
+```{r map_Charlotte, fig.align = "center"}
+geographical_map("Charlotte")
+```
+
+#### Restaurants across Tempe
+
+```{r map_Tempe, fig.align = "center"}
+geographical_map("Tempe")
+```
+
+## 5. Sentiment Analysis{.tabset .tabset-fade}
+
+Since the RAM is not able to handle data for 10 locations, Only Las vegas reviews are used for sentimental analysis. In order to avoid untrustworthy reviews, a review is considered for analysis only if at least 5 people have rated it as useful. Text of the review is converted to lower case and numbers and stop words are removed from it. There are three words that are found to be common across reviews in high frequency in the initial analysis. Las vegas, http and www.yelp.com are removed from the text.
+
+```{r review_sentiment}
+
+
+useful <-     review %>% 
+              left_join(business, by = "business_id") %>% 
+              # Filters reviews for Las Vegas
+              filter(city == 'Las Vegas') %>%
+              # Only reviews that atleast 5 people found as useful is taken
+              filter(useful > 5)
+
+# All text is converted to lower case
+useful$text <- tolower(useful$text)
+# Stop words and repeating words like Las vegas, http, www.yelp.com are removed
+useful$text <- removeWords(useful$text ,c(stopwords("en"), "las vegas","http","www.yelp.com" ))
+useful$text <- removeNumbers(useful$text )
+```
+
+### Frequently linked words
+
+The reviews given by customer related to food, service, ambience and staff are of interest for this case study. As first step, Words that generally appear in reviews after the key words *food*, *service*, *ambience* and *staff* are analysed through a network graph. For these bigrams containing any of these four words as the first word are created. In order to avoid insignificant relationships that crowd the space, only those words that appear alteast 100 times after these key words are considered. 
+
+
+
+```{r common_word, fig.height = 8, fig.width = 10}
+
+# Bigrams are created with words in review text
+bigrams <- useful %>% 
+           unnest_tokens(bigram, text, token = "ngrams", n = 2)
+
+# List of words that are of significance
+analysis_word <- c("food", "ambience", "staff", "service")
+
+# Creates data for network analysis graph
+bg_grapgh <- bigrams %>%
+             # Words from bigram are seperated
+             separate(bigram, c("word1", "word2"), sep = " ")  %>% 
+             # Count for each combination of words are calculated
+             group_by(word1, word2) %>% 
+             summarise( n = n()) %>%
+             # Only the combination with significant words in the beginning and min freq of 100 are taken
+             filter( word1 %in% analysis_word & n > 100) %>%
+             # Creates data for network graph
+             graph_from_data_frame()
+             
+arrow_format <- grid::arrow(type = "closed", length = unit(.1, "inches"))
+
+## Visual representation of connection of pair of words
+ggraph(bg_grapgh, layout = "fr") +
+  # Connection between words are represented by arrows
+  geom_edge_link(aes(edge_alpha = n), 
+                 show.legend = TRUE,
+                 arrow = arrow_format, 
+                 end_cap = circle(.1, 'inches')) +
+  # Nodes for words
+  geom_node_point(color = 'light blue', 
+                  size = 7) +
+  # Text is displayed
+  geom_node_text(aes(label = name), 
+                 vjust = 1, 
+                 hjust = 1,
+                 repel = TRUE) +
+  theme_void()
+
+
+```
+
+The thickness of the arrow denotes the number of times the word appeared. Service is linked to both horrible and great with thick lines. There are large number of positive and negative reviews for service. Food has many words that appear in reviews. Service and food have many common words used in the reviews. Ambience and Staff has less words that appear in reviews with high frequency.
+
+### Contributing words
+
+A restaurant is rated between 1 to 5. Through this visualization, the patterns in reviews given for food, ambience, staff and service is studied. For each review, we find the words that contribute to positive or negative review for each attribute across rating. These are the words that preceed the significant words (food, ambience, staff or service). 
+
+We use sentiments from affinn lexicon for this analysis. The AFINN lexicon assigns each word with a score that runs between -5 and 5, with negative scores indicating negative sentiment and positive scores indicating positive sentiment. We have calculated product of score and number of occurances to identify how much a word affects a review. Top 5 positive and negative words for an attribute across ratings are shown. If multiple words have same effects , all of them are displayed.
+
+For 5 rated restaurants, reviews have words like great and amazing to describe the staff and service. For 4 rated, good and awesome takes their place. For top rated restaurants, the all top 5 words describes food quality. But for 4 rated restaurant, the fifth positive word is pretty which could be used to describe the presentation of food. The distinguishing factor between 4 and 5 could be the taste/quality of food. Top rated restaurant has classy ambience that distinguishes them from 4.
+
+When we move down the rating, the negative words increases across the attributes. The staff at low rated restaurants are described as annoying, stingy, confused and dumb. The service sucks and is horrible, awful. Food becomes dissappointing and horrible. Low rated restaurants have unconfortable, poor or horrible ambience.
+
+<center> <h4> Words that contrubute to <span style="color:green">positive</span> and <span style="color:red">negative </span> sentiments for key attributes in a rating category </h4> </center>
+
+```{r review_words, fig.height = 15, fig.width = 10}
+
+# afinn lexicon is imported
+AFINN <- get_sentiments("afinn")
+
+analysis <- bigrams %>%
+                # Bigrams are seperated
+                separate(bigram, c("word1", "word2"), sep = " ") %>%
+                # Only the words under analysis is chosen as first word
+                filter(word1 %in% analysis_word) %>%
+                # AFINN lexicon is used for sentiment analysis
+                inner_join(AFINN, by = c(word2 = "word")) %>%
+                # Count for each word and rating is taken
+                group_by(word1, word2, score,stars.x)  %>%
+                summarise(n = n()) %>%
+                ungroup()
+
+# creates plots for each star rating
+star_plot <- function(star){
+    analysis_plot <- analysis %>% filter(stars.x == star) %>%
+        mutate(contribution = n * score, sign = ifelse(score > 0 , "P", "N")) %>%
+        arrange(desc(abs(contribution))) %>%
+        group_by(word1,sign) %>%
+        # Selects the top 5 contributions to both positive and negative emotions
+        top_n(5, abs(contribution)) %>%
+        ggplot(aes(drlib::reorder_within(word2, contribution, word1), 
+                   contribution, 
+                   # Color is based on positive or negative emotion
+                   fill = contribution > 0)) +
+        geom_bar(stat = "identity", show.legend = FALSE) +
+        xlab("Words preceded by topic under analysis") +
+        ylab("Sentiment score * Number of occurrances") +
+        ggtitle(paste("Contributing words for rating : ", as.character(star)))+
+        drlib::scale_x_reordered() +
+        facet_wrap( ~ word1,scales = "free", nrow = 1) +
+        coord_flip()
+    return(analysis_plot)
+}
+
+# Created a grid of 5 rows and n columns
+# 5 columns comes from the facet_wrap
+star_plots <- lapply(c(5,4,3,2,1), star_plot)
+do.call("grid.arrange", c(star_plots, ncol = 1))
+```
+
+### Emotions across rating
+
+Now that we have found the words that contribute positive and negative emotions for each attributes across ratings, we will next analyse the general emotion expressed in reviews for each rating. NRC lexicon is used for this analysis. The nrc lexicon categorizes words in a binary fashion (“yes”/“no”) into categories of positive, negative, anger, anticipation, disgust, fear, joy, sadness, surprise, and trust. For each star rating, the percentage of words that express the emotions of trust, fear, anger, anticipation, disgust, joy , sadness and surprise are shown below.
+
+A radar plot is made across emotions to show the percentage projected in reviews. Color in this visualisation represents the rating of restaurant whose review is analysed. We can see that for restaurants with low rating of 1 and 2 have reviews that predominantly express anger, sadness, fear and disgust. These emotions are ecpressed the least in high rated restaurants. Medium rating of 3 shows a large amount of anticipation in their reviews. High rated restaurants (4 and 5 ratings) have very similar trend that in this visualization, they have almost overlapping lines. Though customers express equal percentage of trust in reviews for restaurants with rating of 4 and 5 (Overlapping pink and yellow lines), reviews shows more joy for 5 rated restaurants.
+
+<h4> <center> Percentage of emotions projected in reviews for each rating </h4> </center>
+
+
+```{r sentiment_radar}
+
+# Creates unigrams from text
+unigrams <- useful %>% unnest_tokens(word, text, token = "ngrams", n = 1)
+# nrc lexicon is loaded 
+nrc <- get_sentiments("nrc")
+
+sentiment_analysis <- unigrams %>% 
+               dplyr::group_by(stars.x, word) %>% 
+               # Count of words in review for each rating is calculated
+               summarise( n = n()) %>% 
+               # NRC sentiment analysis
+               inner_join(nrc)
+
+# positive and negative emotions are dropped
+review_nrc <- sentiment_analysis %>%
+  filter(!grepl("positive|negative", sentiment))
+
+
+review_tally <- review_nrc %>%
+                group_by(stars.x, sentiment) %>%
+                tally() %>% 
+                # Calculates the percentage of words that attribute to a sentiment
+                mutate(cuisine_words = (nn / sum(nn))*100) %>% 
+                select(-nn)
+
+# Key value pairs
+scores <- review_tally %>%
+          spread(stars.x, cuisine_words)
+
+# JavaScript radar chart
+chartJSRadar(scores)
+
+```
+
+### Words across cuisines
+
+
+In this step, we investigate if specific words are used in the reviews given to a specific cuisine. If the cuisine category is not registed by the merchant, reviews can be used to identify the cuisine. Common words seen in reviews across the cuisines in Las Vegas versus the frequent words in the reviews given to specific cuisine are identified. This allows us to compare the strong deviations of word frequency within each cuisine as compared to reviews given in location
+
+
+Words that are close to the line(light grey) means they are used in similar frequency in reviews for the cuisine under stude and the rest of all the cuisines. For example, words such as “food”  and "pizza" are fairly common and used with similar frequencies across most of the cuisines. Words that are far from the line (Green color) are words that are found more in one set of cuisine reviews than another. The words standing out above the line are common across the location but not for that particular category. The words below the line are common in that particular category but not across the location. 
+
+For example, “torta” stands out above the line in the American traditional cuisine. This means that “torta” is a word used fairly common in reviews given toother cuisines, but is not used as much in reviews for Traditional cuisine. In contrast, a word below the line such as “burgr” in the traditional American category suggests this word is common in this cuisine review but far less common in reviews for other cuisines.
+
+
+```{r freq_plot_cuisines, fig.height = 10, fig.width = 8}
+
+# Calculates the top 6 cuisines
+LV_top_6_cuisines <- business %>% 
+                    dplyr::select(city , categories) %>%
+                    transform(categories = strsplit(categories, ";")) %>%
+                    unnest(categories) %>%
+                    # Only the categories in cuisine list for LAs Vegas is considered
+                    filter(categories %in% cuisine_list & city == 'Las Vegas')  %>%  
+                    dplyr::group_by(categories) %>%
+                    tally() %>% 
+                    top_n(n = 6) 
+
+# Calculates the percenatge of word use in whole
+word_pct <- useful %>%
+           transform(categories = strsplit(categories, ";")) %>%
+           unnest(categories) %>%
+           filter(categories %in% LV_top_6_cuisines$categories)  %>% 
+           unnest_tokens(word, text) %>%
+           # Removes stop words
+           anti_join(stop_words) %>%
+           dplyr::group_by(word) %>%
+           summarise(n = n()) %>%
+           # Calculate the percentage in the whole review set
+           transmute(word, all_cuisines = n / sum(n))
+
+# calculate percent of word use within each cuisine
+  frequency <- useful %>%
+             transform(categories = strsplit(categories, ";")) %>%
+             unnest(categories) %>%
+             filter(categories  %in% LV_top_6_cuisines$categories)  %>% 
+             unnest_tokens(word, text) %>%
+              anti_join(stop_words) %>%
+              dplyr::group_by(categories,word) %>%
+              summarise(n = n()) %>%
+              # Calculate the percentage in the review for given category
+              mutate(cuisine_words = n / sum(n)) %>%
+              left_join(word_pct) %>%
+              arrange(desc(cuisine_words)) %>%
+              ungroup()
+
+# Plots frequency of words in reviews specific to cuisine in x axis and percentage of appearance in all in y
+ggplot(frequency, aes(x = cuisine_words, y = all_cuisines, color = abs(all_cuisines - cuisine_words))) +
+        geom_abline(color = "gray40", lty = 2) +
+        geom_jitter(alpha = 0.1, size = 3, width = 0.3, height = 0.3) +
+        geom_text(aes(label = word, size = 1), check_overlap = TRUE, vjust = ifelse(frequency$all_cuisines > frequency$cuisine_words, 2,-2)) +
+        scale_x_log10(labels = scales::percent_format()) +
+        scale_y_log10(labels = scales::percent_format()) +
+        scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") +
+        facet_wrap(~ categories, ncol = 2) +
+        theme(legend.position = "none") +
+        labs(y = "Cuisines", x = NULL)
+```
+
+
+## 6.Summary
+
+### Problem statement and data used
+
+Restaurants is US is identified as target market. In order to understand the existing business model, YELP data set is selected. This data set contains information for business across 11 metropolitan areas in four countries. Restaurant data for US was filtered and top 10 cities based on number of restaurants whose data is available is taken. 10 cities were chosen for study based on data available and below are some of the findings from this case study. We have information regarding location, category, working hours for each weekday, number of checkins for each day and hour and user text review. Data is cleansed and processed to create visualizations for exploratory data analysis. Text mining is done on reviews to understand the customer sentiments.
+
+### Data analysis
+
+#### Exploratory data analysis
+
+Based on analysis of Yelp dataset,trends in restaurant market is studied. Data was sliced and diced to create different visualisations to uncover the patterns present. Restaurant locations were plotted on map and where they were aggregated to find the locations where restaurants are densely located. In ordered to find the most busy hours in a city, heat maps where generated for each hour in a weekday. Most frequent categories across the cities were identified using a word cloud. Then it was drilled down to find the top 5 cuisines in each city using bar charts.
+
+#### Sentiment analysis
+
+In order to understand the sentiments of customers, four key attributes of a business were identified. The general customer reaction to food, ambience, staff and service at a restaurant was analysed. As intial step, the words commonly used along with the key terms are visually represented in a network chart. To identify the difference between high and low rated restaurants, the reviews given to each of these four attributes in each rating category were studied seperately The words that contribute to positive and negative sentiments in each attribute are identified and top 5 positive and negative words were shown in a diverging bar chart. The percentage of different emotions expressed in reviews given to each rating category is shown in a radar chart. The difference in usage of words in reviews given to top 6 cuisines in Las vegas was also investigated and displayed.
+
+#### Ineteresting findings
+
+* American cuisine is most popular in most locations. Sandwiches and fast food are the next best options. Asian cuisines like Indian and Chinese did not make it to the top 5 in any of the locations.
+
+* Locations like Las Vegas has an active night life and hours after midnight are the most busy working time for restaurants there. Scottsdale is busy during dinner time around 7 on most days. The patterns in working hours can be seen in the visualization provided in the exploratory data analysis 
+
+* Restaurants are densely pesent mostly in downtowns. When you move further away from the city, number restuarants for which we have information reduces.
+
+* Lot of words are used in common to describe food and service. Great and horrible are used comparitively in same frequency to describe services of restaurants in Las Vegas. Staff and ambience is not descibed using frequent terms in reviews as compared to food and service.
+
+* The distinguishing factor between 4 and 5 could be the taste/quality of food. Top rated restaurant has classy ambience that distinguishes them from 4. Low rated restaurants have unconfortable, poor or horrible ambience. When we move down the rating, the negative words increases across the attributes. The staff at low rated restaurants are described as annoying, stingy, confused and dumb. The service sucks and is horrible and awful. Food becomes dissappointing and horrible. 
+
+* Reviews for restaurants with low rating of 1 and 2 predominantly express anger, sadness, fear and disgust. Medium rating of 3 shows a large amount of anticipation in their reviews. Though customers express percentage of trust in reviews for restaurants with rating of 4 and 5, reviews shows more joy in customers at 5 rated restaurants.
+
+* Each cuisine review has words specific to that particular category. For example refried is a word commonly used only for Mexican cuisine. This can be used to identify the cuisines from reviews.
+
+### Further steps.
+
+* Collect more data on food served, menu, music etc and explore more trends and patterns that will aid a new business person planning to open a restaurant in US
+
+* Create a machine learning model that will identify the cuisine from the review given
+
+* Predict the rating that customer might give to a restaurant by analysing the review given by him/her.
+
+* Due to time constraints, all sentiment analysis in this case study is done using unigrams and bigrams. Expand the scope of study to large n-grams and sentences
+
